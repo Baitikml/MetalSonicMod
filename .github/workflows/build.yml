@@ -1,4 +1,3 @@
-.github/workflows/
 name: Build Metal Sonic mod
 
 on:
