@@ -1,0 +1,60 @@
+.github/workflows/build.yml.
+name: Build Metal Sonic mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest, lib: MetalSonic.dll }
+          - { name: Linux,   os: ubuntu-latest,  lib: libMetalSonic.so }
+          - { name: Android, os: ubuntu-latest,  lib: libMetalSonic.so, android: true }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: RSDKModding/Sonic-Mania-Decompilation
+          ref: 9dc699428420d752af9767bdb13f585ee0881bc0
+          path: decomp
+
+      - name: Build (Windows / Linux)
+        if: ${{ !matrix.android }}
+        shell: bash
+        run: |
+          cmake -S . -B build -DDECOMP="$GITHUB_WORKSPACE/decomp" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Build (Android arm64)
+        if: ${{ matrix.android }}
+        shell: bash
+        run: |
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          cmake -S . -B build -DDECOMP="$GITHUB_WORKSPACE/decomp" -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+          cmake --build build
+
+      - name: Assemble mod folder
+        shell: bash
+        run: |
+          mkdir -p MetalSonic/Data/Sprites/Players MetalSonic/Data/Sprites/UI
+          cp mod.ini MetalSonic/
+          cp MetalSonic.bin MetalSonic1.gif MetalSonic2.gif MetalSonic3.gif MetalSonic/Data/Sprites/Players/
+          cp MetalSaveSelect.bin MetalSaveSelect.gif MetalSonic/Data/Sprites/UI/
+          find build -name "${{ matrix.lib }}" -exec cp {} MetalSonic/ \;
+          ls -R MetalSonic
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MetalSonic-${{ matrix.name }}
+          path: MetalSonic
